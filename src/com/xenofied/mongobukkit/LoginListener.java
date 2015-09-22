@@ -1,7 +1,6 @@
 package com.xenofied.mongobukkit;
 
 
-import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -15,11 +14,6 @@ public class LoginListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onLogin(PlayerLoginEvent event) {
-        Player player = event.getPlayer();
-        if(!MongoBukkit.hasPlayer(player)){
-            MongoBukkit.log("Adding player " + player.getName() + " to the user database.");
-            MongoBukkit.insertUser(player);
-        }
-
+        MongoBukkit.hasPlayer(MongoBukkit.getPlugin(), event.getPlayer());
     }
 }
