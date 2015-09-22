@@ -116,7 +116,7 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
     public static void updatePlayer(final MongoCaller caller, final String context, final UUID playerId,
                                     final Document doc){
 
-        Bukkit.getScheduler().runTask(plugin, new Runnable(){
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable(){
             @Override
             public void run(){
                 getUserCollection().updateOne(new Document("_id", playerId), new Document("$set", doc)
@@ -132,7 +132,7 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
     }
 
     public static void queryPlayer(final MongoCaller caller, final String context, final UUID playerId){
-        Bukkit.getScheduler().runTask(plugin, new Runnable(){
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable(){
             @Override
             public void run(){
                 getUserCollection().find(eq("_id", playerId)).first(getQueryCallback(caller, context));
@@ -149,7 +149,7 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
             caller.onHasUser(playerId, true);
             return;
         }
-        Bukkit.getScheduler().runTask(plugin, new Runnable(){
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable(){
             @Override
             public void run(){
                 getUserCollection().find(eq("_id", playerId)).first(getHasUserCallback(caller, playerId));
