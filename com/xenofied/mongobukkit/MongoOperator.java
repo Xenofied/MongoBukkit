@@ -1,8 +1,13 @@
 package com.xenofied.mongobukkit;
 
+import com.mongodb.Block;
 import com.mongodb.async.SingleResultCallback;
+import com.mongodb.async.client.MongoClient;
+import com.mongodb.async.client.MongoCollection;
 import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
+import org.bson.conversions.Bson;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.ArrayList;
@@ -10,16 +15,27 @@ import java.util.HashMap;
 import java.util.UUID;
 
 
-abstract class MongoOperator extends JavaPlugin{
-    static long nextContext = 0;
+abstract class MongoOperator extends JavaPlugin {
+    private static MongoClient client;
     private static final HashMap<String, Document> queries = new HashMap<>();
+    private static final HashMap<String, ArrayList<Document>> queryBlocks = new HashMap<>();
     public static final ArrayList<UUID> userCache = new ArrayList<>();
+    static long nextContext = 0;
 
-    public static SingleResultCallback<Void> getInsertCallback(final MongoCaller caller, final UUID playerId) {
+    public static SingleResultCallback<Void> getInsertUserCallback(final MongoCaller caller, final UUID playerId) {
         return new SingleResultCallback<Void>() {
             @Override
             public void onResult(final Void result, final Throwable t) {
-                caller.onInsert(playerId);
+                caller.onInsertUser(playerId);
+            }
+        };
+    }
+
+    public static SingleResultCallback<Void> getInsertCallback(final MongoCaller caller, final Document d, final String context) {
+        return new SingleResultCallback<Void>() {
+            @Override
+            public void onResult(final Void result, final Throwable t) {
+                caller.onInsert(context, d);
             }
         };
     }
@@ -28,14 +44,14 @@ abstract class MongoOperator extends JavaPlugin{
         return new SingleResultCallback<Document>() {
             @Override
             public void onResult(final Document result, final Throwable t) {
-                if(result != null)
+                if (result != null)
                     userCache.add(playerId);
                 caller.onHasUser(playerId, result != null);
             }
         };
     }
 
-    public static SingleResultCallback<UpdateResult> getUpdateCallback(final MongoCaller caller, final String context){
+    public static SingleResultCallback<UpdateResult> getUpdateCallback(final MongoCaller caller, final String context) {
         return new SingleResultCallback<UpdateResult>() {
             @Override
             public void onResult(final UpdateResult result, final Throwable t) {
@@ -54,14 +70,90 @@ abstract class MongoOperator extends JavaPlugin{
         };
     }
 
-    public static String getCallbackContext(JavaPlugin plugin, UUID playerId){
-        nextContext += 1;
-        return Integer.toString(plugin.hashCode()) + "." + playerId.toString() + "."+ Long.toString(nextContext);
+    public static SingleResultCallback<Void> getBlockQueryCallback(final MongoCaller caller, final String context) {
+        return new SingleResultCallback<Void>() {
+            @Override
+            public void onResult(final Void result, final Throwable t) {
+                caller.onQuery(context, result);
+            }
+        };
     }
 
-    public static Document getQuery(String context){
-        if(!queries.containsKey(context))
-            return null;
-        return queries.get(context);
+    public static String getCallbackContext(JavaPlugin plugin) {
+        nextContext += 1;
+        return Integer.toString(plugin.hashCode()) + "." + Long.toString(nextContext);
+    }
+
+    public static Document getQuery(String context) {
+        if (queries.containsKey(context))
+            return queries.get(context);
+        return null;
+    }
+
+    public static ArrayList<Document> getQueryBlock(String context){
+        if(queryBlocks.containsKey(context))
+            return queryBlocks.get(context);
+        return null;
+    }
+
+    public static void setClient(MongoClient c) {
+        if (client == null)
+            client = c;
+    }
+
+    public static MongoClient getClient() {
+        return client;
+    }
+
+    public static void insertIntoCollection(final MongoOperator operator, final MongoCaller caller, final String context,
+                                            final Document d, final String collectionName, final String databaseName) {
+        Bukkit.getScheduler().runTaskAsynchronously(operator, new Runnable() {
+            @Override
+            public void run() {
+                getClient().getDatabase(databaseName).getCollection(collectionName)
+                        .insertOne(d, getInsertCallback(caller, d, context));
+            }
+        });
+    }
+
+    public static void updateDocument(final MongoOperator operator, final MongoCaller caller, final String context, final Document d1,
+                                      final Document d2, final String databaseName, final String collectionName) {
+        Bukkit.getScheduler().runTaskAsynchronously(operator, new Runnable() {
+            @Override
+            public void run() {
+                getClient().getDatabase(databaseName).getCollection(collectionName)
+                        .updateOne(d1, new Document("$set", d2)
+                                        .append("$currentDate", new Document("lastModified", true)),
+                                getUpdateCallback(caller, context));
+            }
+        });
+    }
+
+    public static void queryFirstDocument(final MongoOperator operator, final MongoCaller caller, final String context,
+                                          final Bson b, final String databaseName, final String collectionName) {
+        Bukkit.getScheduler().runTaskAsynchronously(operator, new Runnable() {
+            @Override
+            public void run() {
+                getClient().getDatabase(databaseName).getCollection(collectionName)
+                        .find(b).first(getQueryCallback(caller, context));
+            }
+        });
+    }
+
+    public static void queryAllDocument(final MongoOperator operator, final MongoCaller caller, final String context,
+                                        final Bson b, final String databaseName, final String collectionName) {
+        Bukkit.getScheduler().runTaskAsynchronously(operator, new Runnable() {
+            @Override
+            public void run() {
+                getClient().getDatabase(databaseName).getCollection(collectionName).find().forEach(new Block<Document>() {
+                    @Override
+                    public void apply(final Document document) {
+                        if (!queryBlocks.containsKey(context))
+                            queryBlocks.put(context, new ArrayList<Document>());
+                        queryBlocks.get(context).add(document);
+                    }
+                }, getBlockQueryCallback(caller, context));
+            }
+        });
     }
 }

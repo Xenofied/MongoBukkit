@@ -2,7 +2,6 @@ package com.xenofied.mongobukkit;
 
 import static com.mongodb.client.model.Filters.*;
 
-import com.mongodb.async.client.MongoClient;
 import com.mongodb.async.client.MongoClients;
 import com.mongodb.async.client.MongoCollection;
 import com.mongodb.async.client.MongoDatabase;
@@ -23,9 +22,8 @@ import java.util.UUID;
 
 public final class MongoBukkit extends MongoOperator implements MongoCaller {
     private static MongoBukkit plugin;
-    private static MongoClient client;
     private static ArrayList<MongoDatabase> databases;
-    private static MongoCollection<Document> users;
+    private static String[] userDbPath;
 
 
     @Override
@@ -43,21 +41,21 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
 
         log("Connecting to: " + addressString);
 
-        client = MongoClients.create(addressString);
+        setClient(MongoClients.create(addressString));
 
         String userPath = getConfig().getString("user-db");
+        log("User DB: " + userPath);
         if(userPath == null){
             warn("No user database name defined!");
             warn("Falling back to default: MongoBukkit.users");
             userPath = "MongoBukkit.users";
         }
-        String[] path = userPath.split(".");
+        String[] path = userPath.split("\\.");
         if(path.length != 2){
             warn("Invalid path specified!");
             warn("Falling back to default: MongoBukkit.users");
-            path = new String[]{"MongoBukkit", "users"};
+            userDbPath = new String[]{"MongoBukkit", "users"};
         }
-        users = client.getDatabase(path[0]).getCollection(path[1]);
 
         ArrayList<String> dbNames = (ArrayList<String>) getConfig().getStringList("databases");
 
@@ -69,8 +67,8 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
         new LoginListener();
     }
 
-    public static MongoClient getClient(){
-        return client;
+    public static MongoBukkit getPlugin(){
+        return plugin;
     }
 
     public static ArrayList<MongoDatabase> getDatabases(){
@@ -86,11 +84,11 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
     }
 
     public static void addDatabase(String name){
-        databases.add(client.getDatabase(name));
+        databases.add(getClient().getDatabase(name));
     }
 
     public static MongoCollection<Document> getUserCollection(){
-        return users;
+        return getClient().getDatabase(userDbPath[0]).getCollection(userDbPath[1]);
     }
 
     public static void insertUser(final MongoCaller caller, Player player){
@@ -100,48 +98,21 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
 
         final UUID playerId = player.getUniqueId();
 
-        Bukkit.getScheduler().runTask(plugin, new Runnable(){
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable() {
             @Override
-            public void run(){
-                getUserCollection().insertOne(doc, getInsertCallback(caller, playerId));
+            public void run() {
+                getUserCollection().insertOne(doc, getInsertUserCallback(caller, playerId));
             }
         });
-    }
-
-
-    public static void updatePlayer(MongoCaller caller, String context, Player player, Document doc){
-        updatePlayer(caller, context, player.getUniqueId(), doc);
     }
 
     public static void updatePlayer(final MongoCaller caller, final String context, final UUID playerId,
                                     final Document doc){
-
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable(){
-            @Override
-            public void run(){
-                getUserCollection().updateOne(new Document("_id", playerId), new Document("$set", doc)
-                                .append("$currentDate", new Document("lastModified", true)),
-                        getUpdateCallback(caller, context));
-            }
-        });
-
-    }
-
-    public static void queryPlayer(MongoCaller caller, String context, Player player){
-        queryPlayer(caller, context, player.getUniqueId());
+        updateDocument(plugin, caller, context, new Document("_id", playerId), doc, userDbPath[0], userDbPath[1]);
     }
 
     public static void queryPlayer(final MongoCaller caller, final String context, final UUID playerId){
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, new Runnable(){
-            @Override
-            public void run(){
-                getUserCollection().find(eq("_id", playerId)).first(getQueryCallback(caller, context));
-            }
-        });
-    }
-
-    public static void hasPlayer(final MongoCaller caller, Player player){
-        hasPlayer(caller, player.getUniqueId());
+        queryFirstDocument(plugin, caller, context, eq("_id", playerId), userDbPath[0], userDbPath[1]);
     }
 
     public static void hasPlayer(final MongoCaller caller, final UUID playerId){
@@ -159,7 +130,7 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
 
     @Override
     public void onDisable() {
-        client.close();
+        getClient().close();
         userCache.clear();
         databases.clear();
     }
@@ -172,11 +143,7 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
         plugin.getLogger().warning(s);
     }
 
-    public static MongoBukkit getPlugin(){
-        return plugin;
-    }
-
-    public void onInsert(UUID playerId){
+    public void onInsertUser(UUID playerId){
         log("Player " + playerId.toString() + " was added to the user database.");
     }
 
@@ -189,8 +156,13 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
         }
     }
 
+    public void onInsert(String context, Document d){}
+
     public void onUpdate(String context, UpdateResult result){}
 
     public void onQuery(String context, Document d){}
+
+    public void onQuery(String context, Void v){}
+
 
 }

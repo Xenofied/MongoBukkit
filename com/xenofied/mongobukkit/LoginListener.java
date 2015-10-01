@@ -14,6 +14,6 @@ public class LoginListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onLogin(PlayerLoginEvent event) {
-        MongoBukkit.hasPlayer(MongoBukkit.getPlugin(), event.getPlayer());
+        MongoBukkit.hasPlayer(MongoBukkit.getPlugin(), event.getPlayer().getUniqueId());
     }
 }
