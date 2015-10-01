@@ -57,12 +57,10 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
             userDbPath = new String[]{"MongoBukkit", "users"};
         }
 
-        ArrayList<String> dbNames = (ArrayList<String>) getConfig().getStringList("databases");
+        setIsStrict(getConfig().getBoolean("strict-mode"));
+        setDBNames((ArrayList<String>) getConfig().getStringList("databases"));
 
         databases = new ArrayList<>();
-        for(String s: dbNames){
-            addDatabase(s);
-        }
 
         new LoginListener();
     }
@@ -75,20 +73,8 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
         return databases;
     }
 
-    public static MongoDatabase getDatabase(String name){
-        for(MongoDatabase db: databases){
-            if(name.equalsIgnoreCase(db.getName()))
-                return db;
-        }
-        return null;
-    }
-
-    public static void addDatabase(String name){
-        databases.add(getClient().getDatabase(name));
-    }
-
     public static MongoCollection<Document> getUserCollection(){
-        return getClient().getDatabase(userDbPath[0]).getCollection(userDbPath[1]);
+        return getCollection(userDbPath[0], userDbPath[1]);
     }
 
     public static void insertUser(final MongoCaller caller, Player player){
@@ -130,9 +116,9 @@ public final class MongoBukkit extends MongoOperator implements MongoCaller {
 
     @Override
     public void onDisable() {
-        getClient().close();
         userCache.clear();
         databases.clear();
+        closeClient();
     }
 
     public static void log(String s){

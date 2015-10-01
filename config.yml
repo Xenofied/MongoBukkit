@@ -4,6 +4,10 @@ host: mongodb://127.0.0.1:27017
 # Main User Database Name
 user-db: MongoBukkit.users
 
+# Enable/Disable "Strict" mode
+# "Strict" mode prevents creation of new databases and new collections.
+strict-mode: false
+
 # Uncomment for additional databases.
 #databases:
 #- TestDB
